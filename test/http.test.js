@@ -5,6 +5,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import { JsonStore } from "../src/store.js";
+import * as D from "../src/domain.js";
 
 const TMP_DB = new URL("./_http-db.json", import.meta.url).pathname;
 process.env.DB_PATH = TMP_DB;
@@ -293,6 +294,25 @@ test("榜单：公开结果，含原始分、去极值均分与状态", async ()
   // 至少满足各组配额
   const selected = r.json.ranking.filter((x) => x.outcome === "selected");
   assert.ok(selected.length >= 3); // G1:2 + G2:2 + G3:1，但分数需过线
+
+  // 跨组总排名连续 1..N；组内名次各自连续；顺序与均分降序一致。
+  const ranking = r.json.ranking;
+  ranking.forEach((row, i) => assert.equal(row.rank, i + 1, `总名次应连续，第 ${i + 1} 行却是 ${row.rank}`));
+  const groupSeen = {};
+  for (const row of ranking) {
+    groupSeen[row.groupId] = (groupSeen[row.groupId] || 0) + 1;
+    assert.equal(row.groupRank, groupSeen[row.groupId], `${row.submissionId} 组内名次应连续`);
+  }
+  for (let i = 1; i < ranking.length; i++) {
+    assert.ok(ranking[i - 1].avgScore >= ranking[i].avgScore, "总榜应按均分降序");
+  }
+
+  // 同分不乱序：重复读取两次，顺序与名次必须完全一致（确定性）。
+  const again = await req("GET", `/api/calls/${CALL}/results`);
+  assert.deepEqual(
+    again.json.ranking.map((x) => [x.submissionId, x.rank, x.groupRank]),
+    ranking.map((x) => [x.submissionId, x.rank, x.groupRank]),
+  );
 });
 
 test("旧年度榜：手写种子行即使未存 scores，接口也从评分记录补全原始分明细", async () => {
@@ -314,6 +334,19 @@ test("旧年度榜：手写种子行即使未存 scores，接口也从评分记�
 
   // 每一行都有数组（前端 row.scores.join 不再遇到 undefined）
   for (const row of r.json.ranking) assert.ok(Array.isArray(row.scores));
+
+  // 旧榜种子行原本没有 groupRank，接口必须补算：跨组总排名连续、组内各自连续。
+  const order = r.json.ranking.map((x) => x.submissionId);
+  assert.deepEqual(order, ["G3-001", "G3-002", "G1-001", "G2-001", "G2-002"]);
+  const expect = {
+    "G3-001": [1, 1], "G3-002": [2, 2], "G1-001": [3, 1],
+    "G2-001": [4, 1], "G2-002": [5, 2],
+  };
+  for (const row of r.json.ranking) {
+    const [rank, groupRank] = expect[row.submissionId];
+    assert.equal(row.rank, rank, `${row.submissionId} 总名次应为 ${rank}`);
+    assert.equal(row.groupRank, groupRank, `${row.submissionId} 组内名次应为 ${groupRank}`);
+  }
 });
 
 test("静态：页面与 ES 模块工具均可正常返回（200 + 正确 MIME）", async () => {
@@ -349,6 +382,16 @@ test("顺位递补：2025 旧榜 G2 入选者退出 → G2-002 顺位入选；�
   assert.equal(g2001.outcome, "retired");
   assert.equal(g2002.outcome, "selected");
 
+  // 名次立即按新有效名单重算：G2-001 退出后不占名次；G2-002 成为 G2 组第 1。
+  assert.equal(g2001.rank, null);
+  assert.equal(g2001.groupRank, null);
+  assert.equal(g2002.groupRank, 1);
+  const active = res.json.ranking.filter((x) => x.currentStatus !== "retired");
+  assert.deepEqual(active.map((x) => x.submissionId), ["G3-001", "G3-002", "G1-001", "G2-002"]);
+  assert.deepEqual(active.map((x) => x.rank), [1, 2, 3, 4]); // 总排名连续无空洞
+  // 退出者沉到榜尾
+  assert.equal(res.json.ranking[res.json.ranking.length - 1].submissionId, "G2-001");
+
   // 已退出者再次操作 → 409
   const again = await req("POST", "/api/submissions/G2-001/withdraw", {
     user: "a-zhao", body: { reason: "x" },
@@ -375,6 +418,21 @@ test("重启恢复：新建存储实例读回同一文件，作品/分配/榜单
   // 递补状态持久化
   assert.equal(db.submissions.find((s) => s.id === "G2-001").status, "retired");
   assert.equal(db.submissions.find((s) => s.id === "G2-002").status, "selected");
+
+  // 重启后用领域函数重算榜单：递补导致的名次变化必须保持（退出者无名次，G2-002 组内第 1）。
+  const view = D.resultView(db, "2025-annual");
+  const g2001 = view.ranking.find((x) => x.submissionId === "G2-001");
+  const g2002 = view.ranking.find((x) => x.submissionId === "G2-002");
+  assert.equal(g2001.rank, null);
+  assert.equal(g2001.groupRank, null);
+  assert.equal(g2002.groupRank, 1);
+  const active2025 = view.ranking.filter((x) => x.currentStatus !== "retired");
+  assert.deepEqual(active2025.map((x) => x.rank), [1, 2, 3, 4]);
+
+  // 2026 新定稿榜单重启后名次同样连续可复现。
+  const view2026 = D.resultView(db, CALL);
+  view2026.ranking.forEach((x, i) => assert.equal(x.rank, i + 1));
+  view2026.ranking.forEach((x) => assert.ok(Number.isInteger(x.groupRank)));
 });
 
 test("乐观并发：expectedVersion 过期时写事务被拒（version_conflict）", async () => {

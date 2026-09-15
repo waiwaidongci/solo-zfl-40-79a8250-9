@@ -37,6 +37,11 @@ export function formatScoreDetail(row) {
   return { scores, scoreText, avg };
 }
 
+// 名次空值安全：退出者（或旧数据缺名次）名次为 null，页面显示 “—” 而不是 undefined。
+export function displayRank(value) {
+  return Number.isInteger(value) && value > 0 ? String(value) : "—";
+}
+
 // 去掉一个最高分、一个最低分后取平均（与后端一致，用于页面端校验展示）。
 export function trimmedAverage(nums) {
   const xs = (nums || []).filter((n) => typeof n === "number").slice().sort((a, b) => a - b);
@@ -51,6 +56,7 @@ const ReviewUtils = {
   writeStoredIdentity,
   rowScores,
   formatScoreDetail,
+  displayRank,
   trimmedAverage,
 };
 

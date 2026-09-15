@@ -410,6 +410,44 @@ export function submissionScores(db, callId) {
   return map;
 }
 
+// 统一排序口径：均分降序 → 提交先后（createdAt 升序，按时间戳比较以兼容不同时区写法）
+// → 编号升序。跨组总排名与组内排名都用它，保证同分不乱序、结果可复现。
+export function compareRanked(a, b) {
+  const byScore = b.avgScore - a.avgScore;
+  if (byScore !== 0) return byScore;
+  const ta = Date.parse(a.createdAt);
+  const tb = Date.parse(b.createdAt);
+  if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
+  if (Number.isFinite(ta) && !Number.isFinite(tb)) return -1;
+  if (!Number.isFinite(ta) && Number.isFinite(tb)) return 1;
+  return String(a.submissionId).localeCompare(String(b.submissionId));
+}
+
+// 为“当前有效名单”赋名次：退出（retired）者保留在榜单上但不占名次（rank/groupRank=null），
+// 其余按统一口径重排。组内名次只在同组有效作品间连续编号。
+export function assignRanks(rows) {
+  const active = rows.filter((r) => r.currentStatus !== "retired");
+  active.sort(compareRanked);
+
+  const groupCounters = {};
+  const groupRankBySubmission = {};
+  for (const r of active) {
+    groupCounters[r.groupId] = (groupCounters[r.groupId] || 0) + 1;
+    groupRankBySubmission[r.submissionId] = groupCounters[r.groupId];
+  }
+  const globalRankBySubmission = {};
+  active.forEach((r, i) => { globalRankBySubmission[r.submissionId] = i + 1; });
+
+  // 输出保持按有效总排名排列，退出者沉到最后（仍按均分排列，名次为空）。
+  const retired = rows.filter((r) => r.currentStatus === "retired");
+  retired.sort(compareRanked);
+  return [...active, ...retired].map((r) => ({
+    ...r,
+    rank: globalRankBySubmission[r.submissionId] ?? null,
+    groupRank: groupRankBySubmission[r.submissionId] ?? null,
+  }));
+}
+
 // 入选规则：avgScore >= minScore；组内按均分降序、提交先后（createdAt 升序，编号为次级键）排序；
 // 前 quota 名入选，其余满足分数线者进入候补链（保持同一顺序，供顺位递补）。
 export function rankSubmissions(db, callId) {
@@ -418,34 +456,28 @@ export function rankSubmissions(db, callId) {
     .filter((r) => r.avgScore !== null)
     .map((r) => {
       const s = db.submissions.find((x) => x.id === r.submissionId);
-      return { ...r, createdAt: s.createdAt };
+      return { ...r, createdAt: s.createdAt, currentStatus: s.status };
     });
-  rows.sort((a, b) =>
-    b.avgScore - a.avgScore ||
-    a.createdAt.localeCompare(b.createdAt) ||
-    a.submissionId.localeCompare(b.submissionId));
 
-  const ranking = [];
+  // 先按统一口径做组内排序、确定 selected/waitlisted。
   const byGroup = {};
   for (const r of rows) {
     byGroup[r.groupId] ||= [];
     byGroup[r.groupId].push(r);
   }
+  const decided = [];
   for (const [groupId, list] of Object.entries(byGroup)) {
     const quota = call.quotas[groupId] || 0;
+    list.sort(compareRanked);
     list.forEach((r, idx) => {
       const qualified = r.avgScore >= call.minScore;
-      let outcome = "unranked";
-      if (qualified) outcome = idx < quota ? "selected" : "waitlisted";
-      ranking.push({ ...r, groupId, outcome, groupRank: idx + 1 });
+      const outcome = qualified ? (idx < quota ? "selected" : "waitlisted") : "unranked";
+      decided.push({ ...r, groupId, outcome });
     });
   }
-  ranking.sort((a, b) =>
-    b.avgScore - a.avgScore ||
-    a.createdAt.localeCompare(b.createdAt) ||
-    a.submissionId.localeCompare(b.submissionId));
-  return ranking.map((r, i) => ({
-    rank: i + 1,
+  // 总排名与组内名次由统一函数按当前有效名单赋值。
+  return assignRanks(decided).map((r) => ({
+    rank: r.rank,
     submissionId: r.submissionId,
     groupId: r.groupId,
     groupRank: r.groupRank,
@@ -660,30 +692,39 @@ export function resultView(db, callId) {
   const result = db.results.find((r) => r.callId === callId);
   const call = getCall(db, callId);
   if (!result) return { callId, status: call.status, locked: false, ranking: [] };
-  return {
-    ...result,
-    ranking: result.ranking.map((r) => {
-      const s = getSubmission(db, r.submissionId);
-      // 原始分数以评分分配记录为权威来源（旧榜种子的手写行不含 scores，在此补齐）。
-      const scored = db.assignments
-        .filter((a) => a.submissionId === r.submissionId && a.status === "scored")
-        .map((a) => a.score)
-        .sort((x, y) => x - y);
-      return {
-        ...r,
-        scores: scored,
-        recusedCount: db.assignments.filter(
-          (a) => a.submissionId === r.submissionId && a.status === "recused").length,
-        avgScore: r.avgScore ?? trimmedAverage(scored),
-        // 作品当前状态可能已因退出/递补改变，以作品状态为准。
-        currentStatus: s.status,
-        submission: {
-          id: s.id, title: s.title, groupId: s.groupId,
-          authorName: db.users[s.authorId]?.name,
-          authorOrg: db.users[s.authorId]?.org,
-          createdAt: s.createdAt,
-        },
-      };
-    }),
-  };
+
+  // 榜单读取时按“当前有效名单”即时重算名次：
+  // 退出/递补会改变作品状态，总排名与组内名次都要立即反映，而不是沿用定稿时的快照。
+  const rows = result.ranking.map((r) => {
+    const s = getSubmission(db, r.submissionId);
+    // 原始分数以评分分配记录为权威来源（旧榜种子的手写行不含 scores，在此补齐）。
+    const scores = db.assignments
+      .filter((a) => a.submissionId === r.submissionId && a.status === "scored")
+      .map((a) => a.score)
+      .sort((x, y) => x - y);
+    // outcome 以作品当前状态为准：selected / waitlisted / retired，其余保留定稿结论。
+    const outcome = { selected: "selected", waitlisted: "waitlisted", retired: "retired" }[s.status]
+      || r.outcome;
+    return {
+      submissionId: r.submissionId,
+      groupId: r.groupId,
+      avgScore: r.avgScore ?? trimmedAverage(scores),
+      scores,
+      createdAt: s.createdAt,
+      currentStatus: s.status,
+      recusedCount: db.assignments.filter(
+        (a) => a.submissionId === r.submissionId && a.status === "recused").length,
+      storedOutcome: r.outcome,
+      outcome,
+      submission: {
+        id: s.id, title: s.title, groupId: s.groupId,
+        authorName: db.users[s.authorId]?.name,
+        authorOrg: db.users[s.authorId]?.org,
+        createdAt: s.createdAt,
+      },
+    };
+  });
+
+  const ranking = assignRanks(rows).map(({ storedOutcome, ...rest }) => rest);
+  return { ...result, ranking };
 }

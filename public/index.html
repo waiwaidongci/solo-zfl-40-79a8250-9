@@ -505,8 +505,8 @@ async function drawRanking(){
   box.innerHTML = `<p>定稿时间：${r.finalizedAt?.replace("T"," ").slice(0,19)||"—"} · 最低分 ${r.minScore} · ${r.locked?"名单已锁定":""}</p>
   <div style="overflow:auto"><table><thead><tr><th>总排名</th><th>组内</th><th>编号</th><th>作品</th><th>组别</th><th>作者</th><th>各评审原始分</th><th>去极值均分</th><th>结果</th></tr></thead><tbody>` +
   r.ranking.map(row=>`<tr>
-    <td><span class="rank-no ${row.outcome==="selected"?"gold":""}">${row.rank}</span></td>
-    <td>${row.groupRank}</td><td class="code">${row.submissionId}</td>
+    <td><span class="rank-no ${row.outcome==="selected"?"gold":""}">${ReviewUtils.displayRank(row.rank)}</span></td>
+    <td>${ReviewUtils.displayRank(row.groupRank)}</td><td class="code">${row.submissionId}</td>
     <td>${esc(row.submission.title)}</td><td>${GROUP_NAME[row.groupId]}</td>
     <td>${esc(row.submission.authorName)}<div class="meta">${esc(row.submission.authorOrg)}</div></td>
     <td><span class="meta">${ReviewUtils.formatScoreDetail(row).scoreText}</span></td>
@@ -540,7 +540,8 @@ async function drawPromo(){
   const rows = r.ranking.map(row=>{
     const canWithdraw = row.outcome==="selected";
     return `<tr>
-      <td><span class="rank-no ${row.outcome==="selected"?"gold":""}">${row.rank}</span></td>
+      <td><span class="rank-no ${row.outcome==="selected"?"gold":""}">${ReviewUtils.displayRank(row.rank)}</span></td>
+      <td>${ReviewUtils.displayRank(row.groupRank)}</td>
       <td class="code">${row.submissionId}</td><td>${GROUP_NAME[row.groupId]}</td>
       <td>${esc(row.submission.title)}</td>
       <td>${esc(row.submission.authorName)}</td>
@@ -549,7 +550,7 @@ async function drawPromo(){
       <td>${canWithdraw?`<button class="btn rust" data-exit="${row.submissionId}">办理退出（顺位递补）</button>`:"—"}</td>
     </tr>`;
   }).join("");
-  box.innerHTML = `<div style="overflow:auto"><table><thead><tr><th>顺位</th><th>编号</th><th>组别</th><th>作品</th><th>作者</th><th>均分</th><th>状态</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+  box.innerHTML = `<div style="overflow:auto"><table><thead><tr><th>总顺位</th><th>组内</th><th>编号</th><th>组别</th><th>作品</th><th>作者</th><th>均分</th><th>状态</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="meta">规则：入选者退出 → 系统在同组候补链中按总顺位取第一位递补；无候补则名额空缺，不可跨组顶替。</p>`;
   $$("[data-exit]").forEach(b=>b.onclick=async()=>{
     const sid=b.dataset.exit;

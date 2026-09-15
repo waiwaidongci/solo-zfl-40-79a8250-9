@@ -376,3 +376,121 @@ test("无同组候补时名额空缺", async () => {
   assert.equal(out.promoted, null);
   assert.equal(out.quotaLeftUnfilled, true);
 });
+
+/* ---------------- 名次：组内 / 总排名 / 同分 / 递补重算 ---------------- */
+
+test("compareRanked：均分优先，同分按提交先后，再同按编号（绝不乱序）", () => {
+  const rows = [
+    { submissionId: "B", avgScore: 80, createdAt: "2026-09-02T00:00:00+08:00" },
+    { submissionId: "A", avgScore: 90, createdAt: "2026-09-10T00:00:00+08:00" },
+    { submissionId: "C", avgScore: 90, createdAt: "2026-09-01T00:00:00+08:00" },
+    { submissionId: "D", avgScore: 90, createdAt: "2026-09-01T00:00:00+08:00" },
+  ];
+  const sorted = rows.slice().sort(D.compareRanked).map((r) => r.submissionId);
+  // C、D 同分同时间 -> 编号 C 在前；90 分两位在 80 分之前。
+  assert.deepEqual(sorted, ["C", "D", "A", "B"]);
+});
+
+test("assignRanks：跨组总排名连续，组内名次各自连续", () => {
+  const rows = [
+    { submissionId: "G1-1", groupId: "G1", avgScore: 90, currentStatus: "selected", createdAt: "2026-09-01" },
+    { submissionId: "G2-1", groupId: "G2", avgScore: 95, currentStatus: "selected", createdAt: "2026-09-02" },
+    { submissionId: "G1-2", groupId: "G1", avgScore: 85, currentStatus: "waitlisted", createdAt: "2026-09-03" },
+    { submissionId: "G2-2", groupId: "G2", avgScore: 70, currentStatus: "unranked", createdAt: "2026-09-04" },
+  ];
+  const ranked = D.assignRanks(rows);
+  const byId = Object.fromEntries(ranked.map((r) => [r.submissionId, r]));
+  // 总排名：G2-1(95) > G1-1(90) > G1-2(85) > G2-2(70)
+  assert.equal(byId["G2-1"].rank, 1);
+  assert.equal(byId["G1-1"].rank, 2);
+  assert.equal(byId["G1-2"].rank, 3);
+  assert.equal(byId["G2-2"].rank, 4);
+  // 组内：G1-1 第 1、G1-2 第 2；G2-1 第 1、G2-2 第 2
+  assert.equal(byId["G1-1"].groupRank, 1);
+  assert.equal(byId["G1-2"].groupRank, 2);
+  assert.equal(byId["G2-1"].groupRank, 1);
+  assert.equal(byId["G2-2"].groupRank, 2);
+});
+
+test("assignRanks：retired 者不占名次，其余立即重排且退出者沉底", () => {
+  const rows = [
+    { submissionId: "X1", groupId: "G1", avgScore: 90, currentStatus: "retired", createdAt: "2026-09-01" },
+    { submissionId: "X2", groupId: "G1", avgScore: 88, currentStatus: "selected", createdAt: "2026-09-02" },
+    { submissionId: "X3", groupId: "G1", avgScore: 80, currentStatus: "waitlisted", createdAt: "2026-09-03" },
+  ];
+  const ranked = D.assignRanks(rows);
+  const byId = Object.fromEntries(ranked.map((r) => [r.submissionId, r]));
+  assert.equal(byId["X1"].rank, null);
+  assert.equal(byId["X1"].groupRank, null);
+  assert.equal(byId["X2"].rank, 1);
+  assert.equal(byId["X2"].groupRank, 1);
+  assert.equal(byId["X3"].rank, 2);
+  assert.equal(byId["X3"].groupRank, 2);
+  // 输出顺序：有效者在前、退出者沉底
+  assert.equal(ranked[ranked.length - 1].submissionId, "X1");
+});
+
+test("旧榜 resultView：补出 groupRank，跨组总排名与组内名次正确（2025 种子）", () => mut((db) => {
+  const v = D.resultView(db, "2025-annual");
+  const byId = Object.fromEntries(v.ranking.map((r) => [r.submissionId, r]));
+  // G3-001 92 总第 1、G3 组第 1；G1-001 90 总第 3、G1 组第 1；G2-002 80 组内第 2
+  assert.equal(byId["G3-001"].rank, 1);
+  assert.equal(byId["G3-001"].groupRank, 1);
+  assert.equal(byId["G1-001"].rank, 3);
+  assert.equal(byId["G1-001"].groupRank, 1);
+  assert.equal(byId["G2-001"].groupRank, 1);
+  assert.equal(byId["G2-002"].groupRank, 2);
+  for (const r of v.ranking) {
+    assert.ok(Number.isInteger(r.groupRank), `${r.submissionId} 必须有组内名次（旧种子缺该字段，需补算）`);
+    assert.ok(Number.isInteger(r.rank));
+    assert.ok(Array.isArray(r.scores));
+  }
+}));
+
+test("退出递补后：总排名与组内名次按新有效名单立即重算", () => mut((db) => {
+  // 2025：G2-001(86) 入选、G2-002(80) 候补。退出 G2-001 → G2-002 递补。
+  D.withdrawSelection(db, "admin", "G2-001", "退出");
+  const v = D.resultView(db, "2025-annual");
+  const byId = Object.fromEntries(v.ranking.map((r) => [r.submissionId, r]));
+  // G2-001 退出：不再占名次
+  assert.equal(byId["G2-001"].rank, null);
+  assert.equal(byId["G2-001"].groupRank, null);
+  assert.equal(byId["G2-001"].currentStatus, "retired");
+  // G2-002 递补入选，并占据 G2 组内第 1
+  assert.equal(byId["G2-002"].outcome, "selected");
+  assert.equal(byId["G2-002"].currentStatus, "selected");
+  assert.equal(byId["G2-002"].groupRank, 1);
+  // 有效总排名连续：G3-001(92)、G3-002(91)、G1-001(90)、G2-002(80)
+  const active = v.ranking.filter((r) => r.currentStatus !== "retired");
+  assert.deepEqual(active.map((r) => r.submissionId), ["G3-001", "G3-002", "G1-001", "G2-002"]);
+  assert.deepEqual(active.map((r) => r.rank), [1, 2, 3, 4]);
+  // 退出者沉底
+  assert.equal(v.ranking[v.ranking.length - 1].submissionId, "G2-001");
+}));
+
+test("跨组同分：跨组也按提交先后排总名次，组内仍独立编号", () => mut((db) => {
+  // 构造独立征稿：G1、G2 各一件，均分同为 88，G1 先提交。
+  db.calls.push({
+    id: "call-tie", title: "跨组同分", deadline: "2026-01-01T00:00:00+08:00",
+    minScore: 60, quotas: { G1: 1, G2: 1 }, reviewersPerSubmission: 3,
+    status: "assigned", createdAt: "2025-12-01T00:00:00+08:00",
+  });
+  const mk = (id, groupId, createdAt) => db.submissions.push({
+    id, callId: "call-tie", groupId, authorId: "a-lin", title: id, medium: "x",
+    statement: "x", createdAt, status: "locked",
+  });
+  mk("GT1", "G1", "2026-09-01T09:00:00+08:00");
+  mk("GT2", "G2", "2026-09-05T09:00:00+08:00");
+  const give = (sid, revs) => revs.forEach((rv, i) => db.assignments.push({
+    id: `T-${sid}-${i}`, submissionId: sid, reviewerId: rv, status: "scored",
+    score: 88, note: "", assignedAt: "x", scoredAt: "x", recusedAt: null, recuseReason: null,
+  }));
+  give("GT1", ["r-gu", "r-yan", "r-su"]); // 三位无冲突的 G1 专长
+  give("GT2", ["r-he", "r-luo", "r-gu"]);   // 三位含 G2 专长
+  const ranking = D.rankSubmissions(db, "call-tie");
+  assert.deepEqual(ranking.map((r) => r.submissionId), ["GT1", "GT2"]); // 同分先提交在前
+  assert.equal(ranking[0].rank, 1);
+  assert.equal(ranking[1].rank, 2);
+  assert.equal(ranking[0].groupRank, 1);
+  assert.equal(ranking[1].groupRank, 1); // 不同组，各自组内第 1
+}));

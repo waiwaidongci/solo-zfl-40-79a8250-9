@@ -100,7 +100,7 @@ src/
   server.js   # HTTP 路由、身份、幂等键、静态首页
 public/
   index.html    # 六标签单页应用（ES module，无构建、无框架）
-  app-utils.js  # 页面纯工具：身份的 localStorage 持久化、榜单分数健壮渲染（可被单测直接 import）
+  app-utils.js  # 页面纯工具：身份 localStorage 持久化、榜单分数/名次空值安全渲染（可被单测直接 import）
 scripts/
   run-tests.mjs   # 跨版本测试入口（枚举用例文件、透传失败退出码）
 test/

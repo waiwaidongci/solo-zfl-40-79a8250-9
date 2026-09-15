@@ -89,3 +89,26 @@ test("榜单：页面端去极值均分与后端一致", () => {
   assert.equal(ReviewUtils.trimmedAverage([90, 80]), null);
   assert.equal(ReviewUtils.trimmedAverage(undefined), null);
 });
+
+/* ---------------- 名次显示（修复旧榜 groupRank undefined） ---------------- */
+
+test("名次：有效正整数原样显示，null/undefined/非法值回落为占位 —", () => {
+  assert.equal(ReviewUtils.displayRank(1), "1");
+  assert.equal(ReviewUtils.displayRank(3), "3");
+  assert.equal(ReviewUtils.displayRank(null), "—");
+  assert.equal(ReviewUtils.displayRank(undefined), "—");
+  assert.equal(ReviewUtils.displayRank(0), "—");
+  assert.equal(ReviewUtils.displayRank(-2), "—");
+  assert.equal(ReviewUtils.displayRank("2"), "—"); // 不接受字符串，避免拼出脏名次
+});
+
+test("名次：页面榜单与递补两处都对 rank/groupRank 做空值安全渲染", () => {
+  const html = readFileSync(join(root, "public", "index.html"), "utf8");
+  // 不应再直接插值未兜底的名次
+  assert.doesNotMatch(html, />\$\{row\.rank\}<\/span>/);
+  assert.doesNotMatch(html, /<td>\$\{row\.groupRank\}<\/td>/);
+  // 两处（榜单页 + 递补页）都用 displayRank
+  const uses = html.match(/ReviewUtils\.displayRank\(/g) || [];
+  assert.ok(uses.length >= 4, "总排名与组内名次在两个页面共应至少出现 4 处安全渲染");
+});
+
