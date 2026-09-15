@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>蓝晒工作室 · 开放征稿与匿名评审台</title>
+<style>
+  :root{
+    --bg:#eef3f6; --panel:#ffffff; --ink:#15243a; --muted:#5c6b7d; --line:#cdd9e3;
+    --cyan:#0f5b8d; --cyan-d:#0a3d61; --cyan-l:#dceaf4; --rust:#a8542f; --gold:#b8872b;
+    --ok:#2e7d5b; --bad:#b03a2e; --warn:#9b6a1f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--cyan-d),var(--cyan));color:#fff;padding:18px 26px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  header h1{margin:0;font-size:22px;letter-spacing:1px}
+  header .sub{opacity:.85;font-size:13px;margin-top:3px}
+  .identity{display:flex;align-items:center;gap:8px;font-size:13px}
+  .identity select{background:#fff;border:0;border-radius:6px;padding:7px 9px;font:inherit;color:var(--ink);min-width:210px}
+  nav{background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;padding:0 18px;
+    position:sticky;top:0;z-index:5}
+  nav button{appearance:none;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);
+    padding:14px 16px;font:inherit;font-size:15px;cursor:pointer}
+  nav button.active{color:var(--cyan);border-bottom-color:var(--cyan);font-weight:700}
+  main{padding:22px 26px;max-width:1180px;margin:0 auto}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+  .panel h2{margin:0 0 6px;font-size:17px}
+  .panel .hint{color:var(--muted);font-size:13px;margin:0 0 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font:inherit;background:#fff;color:var(--ink)}
+  textarea{min-height:70px;resize:vertical}
+  button.btn{background:var(--cyan);color:#fff;border:0;border-radius:7px;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;margin-top:12px}
+  button.btn:hover{background:var(--cyan-d)}
+  button.btn.ghost{background:#fff;color:var(--cyan);border:1px solid var(--cyan)}
+  button.btn.rust{background:var(--rust)}
+  button.btn[disabled]{opacity:.5;cursor:not-allowed}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:none;white-space:nowrap}
+  tr:hover td{background:#f7fafc}
+  .pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;border:1px solid var(--line);color:var(--muted)}
+  .pill.open{background:#e4f3ea;color:var(--ok);border-color:#bfe3cd}
+  .pill.locked{background:#fdf0e2;color:var(--warn);border-color:#f2dcb8}
+  .pill.assigned{background:var(--cyan-l);color:var(--cyan-d);border-color:#bcd7ea}
+  .pill.finalized{background:#e8e2f4;color:#4d3a7d;border-color:#d2c4ec}
+  .pill.selected{background:#e4f3ea;color:var(--ok);border-color:#bfe3cd}
+  .pill.waitlisted{background:#fdf0e2;color:var(--warn);border-color:#f2dcb8}
+  .pill.retired{background:#f6e3e0;color:var(--bad);border-color:#ecc4be}
+  .pill.withdrawn{background:#eceff1;color:var(--muted)}
+  .pill.submitted{background:#f4f7fa;color:var(--muted)}
+  .flash{position:fixed;right:20px;bottom:20px;max-width:420px;z-index:50;display:flex;flex-direction:column;gap:8px}
+  .flash div{border-radius:8px;padding:11px 14px;font-size:14px;box-shadow:0 6px 20px rgba(10,40,70,.18);color:#fff}
+  .flash .ok{background:var(--ok)} .flash .err{background:var(--bad)}
+  .card{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+  .card h3{margin:0 0 4px;font-size:16px}
+  .meta{color:var(--muted);font-size:12.5px}
+  .code{font-weight:700;letter-spacing:.5px;color:var(--cyan-d)}
+  .kv{display:grid;grid-template-columns:88px 1fr;gap:4px 10px;font-size:13px;margin-top:8px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0}
+  .score-input{width:90px}
+  .danger{color:var(--bad)}
+  .badge-num{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:6px;
+    background:var(--cyan);color:#fff;font-size:12px;padding:0 6px;margin-left:6px}
+  .conflict{color:var(--rust);font-size:12.5px}
+  details{margin-top:8px} summary{cursor:pointer;color:var(--cyan);font-size:13px}
+  .rank-no{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--cyan-l);color:var(--cyan-d);
+    align-items:center;justify-content:center;font-weight:700;font-size:13px}
+  .rank-no.gold{background:#f6e7c4;color:#7c5a10}
+  .muted{color:var(--muted)}
+  .anon{border:1px dashed #9bb8cc;background:#f6fafc;border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--cyan-d);margin-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>蓝晒工作室 · 开放征稿与匿名评审台</h1>
+    <div class="sub">分组征稿 · 截止锁定 · 编号盲评 · 专长均衡 · 回避校验 · 去极值均分 · 配额定稿 · 顺位递补</div>
+  </div>
+  <div class="identity">
+    <span>当前身份</span>
+    <select id="identity"></select>
+    <button class="btn ghost" id="reloadBtn" style="margin:0">刷新</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-tab="calls" class="active">① 征稿</button>
+  <button data-tab="assign">② 分配</button>
+  <button data-tab="review">③ 评分</button>
+  <button data-tab="recuse">④ 回避</button>
+  <button data-tab="ranking">⑤ 榜单</button>
+  <button data-tab="promotion">⑥ 递补</button>
+</nav>
+
+<main>
+  <!-- ① 征稿 -->
+  <section id="tab-calls">
+    <div class="panel">
+      <h2>开放征稿</h2>
+      <p class="hint">作品按组别提交；同一作者在同一征稿中只能有一件在途作品，重复提交会被拒绝。截止时刻后内容锁定。</p>
+      <div id="callList" class="cards"></div>
+    </div>
+    <div class="panel" id="submitPanel" hidden>
+      <h2>提交作品到 <span id="submitCallName"></span></h2>
+      <p class="hint">编号将在锁定后用于匿名评审。提交接口支持 Idempotency-Key，网络重试不会产生重复作品。</p>
+      <form id="submitForm">
+        <input type="hidden" name="callId">
+        <div class="grid2">
+          <div>
+            <label>参赛组别 *</label>
+            <select name="groupId" id="groupId"></select>
+            <label>作品标题 *</label>
+            <input name="title" required maxlength="80" placeholder="如：潮间带·七联">
+          </div>
+          <div>
+            <label>媒介 / 尺寸 *</label>
+            <input name="medium" required maxlength="120" placeholder="如：纯棉纸蓝晒，78×54cm">
+            <label>作品阐述 *</label>
+            <textarea name="statement" required maxlength="600" placeholder="创作说明（锁定后对评审可见，不显示作者信息）"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" type="submit">提交作品</button>
+          <span class="meta">提示：再次点击或刷新重试不会重复入库</span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ② 分配 -->
+  <section id="tab-assign" hidden>
+    <div class="panel">
+      <h2>评审分配（专长均衡 + 回避）</h2>
+      <p class="hint">仅管理员可操作。系统只从具备该组专长的评审中分配，自动排除同机构与两年内合作者；
+        每件作品至少 3 名评审，按当前评审负担均衡摊派。评审回避后可再次运行补足名额。</p>
+      <div class="row">
+        <select id="assignCall" style="max-width:340px"></select>
+        <button class="btn" id="assignBtn">执行 / 补足分配（每件 ≥ 3 人）</button>
+        <button class="btn ghost" id="lockBtn">截止并锁定征稿</button>
+      </div>
+      <div id="assignSummary" style="margin-top:12px"></div>
+    </div>
+    <div class="panel">
+      <h2>回避矩阵（管理预览）</h2>
+      <p class="hint">列出每件作品被排除的评审及原因：<b>same_org</b> 同机构、<b>recent_collaboration</b> 两年内合作、<b>no_expertise</b> 专长不符。</p>
+      <div id="conflictBox"></div>
+    </div>
+    <div class="panel">
+      <h2>当前分配与评分进度</h2>
+      <div id="assignmentTable"></div>
+    </div>
+  </section>
+
+  <!-- ③ 评分 -->
+  <section id="tab-review" hidden>
+    <div class="panel">
+      <div class="anon">匿名评审：您只能看到作品编号与作品内容，看不到作者姓名或机构。同一作品您只能评分一次，重复提交返回冲突。</div>
+      <div class="row">
+        <select id="reviewCall" style="max-width:340px"></select>
+      </div>
+      <div id="reviewQueue" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- ④ 回避 -->
+  <section id="tab-recuse" hidden>
+    <div class="panel">
+      <h2>评审回避</h2>
+      <p class="hint">若您在分配后发现与作者存在同机构或两年内合作等利益冲突，请主动回避。回避后该名额空出，由管理员重新分配补足；已评分作品不能再自行回避。</p>
+      <div class="row">
+        <select id="recuseCall" style="max-width:340px"></select>
+      </div>
+      <div id="recuseList" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- ⑤ 榜单 -->
+  <section id="tab-ranking" hidden>
+    <div class="panel">
+      <h2>入选榜单</h2>
+      <p class="hint">每件作品的分数去掉一个最高分、一个最低分后取平均（3 人时即中位数）。入选须同时满足：组内配额 + 不低于最低分；同分时按提交先后排序。</p>
+      <div class="row">
+        <select id="rankCall" style="max-width:340px"></select>
+        <button class="btn" id="finalizeBtn">定稿并锁定名单</button>
+      </div>
+      <div id="rankingBox" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- ⑥ 递补 -->
+  <section id="tab-promotion" hidden>
+    <div class="panel">
+      <h2>名单锁定 · 退出与顺位递补</h2>
+      <p class="hint">定稿后名单锁定。入选者退出时，名额只能由<b>同组</b>未入选者按榜单顺位（分数 → 提交先后）自动递补，不能跨组或人工指派；无候补则名额空缺。</p>
+      <div class="row">
+        <select id="promoCall" style="max-width:340px"></select>
+      </div>
+      <div id="promoBox" style="margin-top:14px"></div>
+    </div>
+  </section>
+</main>
+
+<div class="flash" id="flash"></div>
+
+<script>
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const GROUP_NAME = { G1:"实验蓝晒组", G2:"古典工艺组", G3:"摄影书册组" };
+let me = null, meta = null, calls = [];
+
+function flash(msg, ok=true){
+  const box = $("#flash");
+  const d = document.createElement("div");
+  d.className = ok ? "ok" : "err";
+  d.textContent = msg;
+  box.appendChild(d);
+  setTimeout(()=>d.remove(), 4200);
+}
+
+async function api(path, opts={}){
+  const headers = { ...(opts.headers||{}) };
+  if (me) headers["X-User-Id"] = me;
+  if (opts.body) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, { ...opts, headers });
+  let data = null;
+  try { data = await res.json(); } catch { data = {}; }
+  if (!res.ok) {
+    const err = new Error(data.message || data.error || ("HTTP " + res.status));
+    err.status = res.status; err.code = data.error; err.details = data.details;
+    err.replayed = res.headers.get("Idempotent-Replay");
+    throw err;
+  }
+  return data;
+}
+
+const statusPill = (s) => {
+  const map = { open:"征稿中", locked:"已锁定", assigned:"待评分", finalized:"已定稿",
+    submitted:"已提交", scored:"已评分", unranked:"未入选",
+    selected:"入选", waitlisted:"候补", retired:"已退出", withdrawn:"已撤回", recused:"已回避" };
+  return `<span class="pill ${s}">${map[s]||s}</span>`;
+};
+const esc = (x)=>String(x??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- 身份 ---------- */
+async function loadMeta(){
+  meta = await api("/api/meta");
+  const sel = $("#identity");
+  if (!sel.options.length){
+    sel.innerHTML = '<option value="">（未选择身份）</option>' +
+      meta.users.map(u=>`<option value="${u.id}">${u.role==="admin"?"管理员":u.role==="reviewer"?"评审":"作者"} · ${u.name}（${u.org}）</option>`).join("");
+    sel.value = localStorage.getItem("uid") || "";
+    sel.onchange = ()=>{ localStorage.setItem("uid", sel.value||""); location.reload(); };
+  }
+  me = meta.me?.id || null;
+}
+
+/* ---------- 通用：征稿下拉 ---------- */
+function fillCallSelect(sel, withAny=false){
+  sel.innerHTML = (withAny?'<option value="">选择征稿…</option>':'') +
+    calls.map(c=>`<option value="${c.id}">${c.title} · ${({open:"征稿中",locked:"已锁定",assigned:"评审中",finalized:"已定稿"})[c.status]} · 截止 ${c.deadline.slice(0,16).replace("T"," ")}</option>`).join("");
+}
+
+/* ---------- ① 征稿 ---------- */
+async function renderCalls(){
+  calls = (await api("/api/calls")).calls;
+  $("#callList").innerHTML = calls.map(c=>`
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3>${esc(c.title)}</h3>${statusPill(c.status)}
+      </div>
+      <dl class="kv">
+        <dt>征稿号</dt><dd class="code">${c.id}</dd>
+        <dt>截止时间</dt><dd>${c.deadline.replace("T"," ").slice(0,19)}</dd>
+        <dt>最低分</dt><dd>${c.minScore} 分（满分 100）</dd>
+        <dt>组别配额</dt><dd>${Object.entries(c.quotas).map(([g,q])=>`${GROUP_NAME[g]} ${q}`).join("；")}</dd>
+        <dt>在途作品</dt><dd>${c.submissionCount} 件 · 每件 ${c.reviewersPerSubmission} 名评审</dd>
+      </dl>
+      ${c.mine.length ? `<div style="margin-top:8px">我的作品：${c.mine.map(m=>`<span class="pill submitted">${m.id} ${esc(m.title)} ${statusPill(m.status)}</span>`).join(" ")}</div>` : ""}
+      <div class="row" style="margin-top:10px">
+        ${c.status==="open" ? `<button class="btn" data-submit="${c.id}">我要投稿</button>` : ""}
+        <button class="btn ghost" data-detail="${c.id}">查看作品</button>
+      </div>
+    </div>`).join("");
+
+  $$("[data-submit]").forEach(b=>b.onclick=()=>openSubmit(b.dataset.submit));
+  $$("[data-detail]").forEach(b=>b.onclick=()=>showCallDetail(b.dataset.detail));
+
+  // 填充组别选项
+  $("#groupId").innerHTML = Object.entries(GROUP_NAME).map(([g,n])=>`<option value="${g}">${n}</option>`).join("");
+}
+
+function openSubmit(callId){
+  if(!me){ flash("请先在右上角选择作者身份", false); return; }
+  if(meta.me.role!=="author"){ flash("只有作者身份可以投稿", false); return; }
+  const c = calls.find(x=>x.id===callId);
+  $("#submitPanel").hidden = false;
+  $("#submitCallName").textContent = c.title;
+  $("#submitForm").callId.value = callId;
+  $("#submitPanel").scrollIntoView({behavior:"smooth"});
+}
+
+async function showCallDetail(callId){
+  const c = await api("/api/calls/"+callId);
+  const rows = c.submissions.map(s=>{
+    const showAuthor = s.authorName;
+    return `<tr><td class="code">${s.id}</td><td>${GROUP_NAME[s.groupId]}</td>
+      <td>${esc(s.title)}<div class="meta">${esc(s.medium||"")}</div></td>
+      <td>${showAuthor?esc(showAuthor):'<span class="muted">匿名</span>'}</td>
+      <td>${statusPill(s.status)}</td>
+      <td>${s.avgScore!=null?`<b>${s.avgScore}</b> <span class="meta">(${s.scoreCount}人已评)</span>`:'<span class="muted">—</span>'}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="muted">暂无可见作品（征稿中仅可见本人作品；评审仅可见被分配的作品）</td></tr>`;
+  const old = $("#detailPanel");
+  if (old) old.remove();
+  flash(`《${c.title}》共 ${c.submissions.length} 件可见作品`);
+  $("#submitPanel").insertAdjacentHTML("afterend",
+    `<div class="panel" id="detailPanel"><h2>${esc(c.title)} · 作品名册</h2>
+     <div style="overflow:auto"><table><thead><tr><th>编号</th><th>组别</th><th>作品</th><th>作者</th><th>状态</th><th>均分</th></tr></thead><tbody>${rows}</tbody></table></div></div>`);
+}
+
+$("#submitForm").onsubmit = async (e)=>{
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const payload = Object.fromEntries(fd.entries());
+  try{
+    const created = await api(`/api/calls/${payload.callId}/submissions`, {
+      method:"POST",
+      headers:{ "Idempotency-Key": (crypto.randomUUID?crypto.randomUUID():String(Date.now())) },
+      body: JSON.stringify(payload),
+    });
+    flash(`提交成功，作品编号 ${created.id}`);
+    e.target.reset(); $("#submitPanel").hidden = true;
+    renderCalls();
+  }catch(err){ flash(err.message, false); }
+};
+
+/* ---------- ② 分配 ---------- */
+async function renderAssign(){
+  if(!calls.length) calls = (await api("/api/calls")).calls;
+  fillCallSelect($("#assignCall"), true);
+  await renderAssignmentTable();
+}
+$("#assignCall").onchange = renderAssignmentTable;
+
+async function renderAssignmentTable(){
+  const callId = $("#assignCall").value;
+  if(!callId){ $("#assignmentTable").innerHTML='<p class="muted">请选择征稿</p>'; $("#conflictBox").innerHTML=""; return; }
+  const isAdmin = meta.me?.role==="admin";
+  if(isAdmin){
+    const cm = await api(`/api/calls/${callId}/conflicts`);
+    $("#conflictBox").innerHTML = `<div style="overflow:auto"><table><thead><tr><th>作品</th><th>组别</th><th>作者（管理可见）</th><th>被排除的评审</th></tr></thead><tbody>` +
+      cm.matrix.map(m=>`<tr><td class="code">${m.submissionId}</td><td>${GROUP_NAME[m.groupId]}</td>
+        <td>${esc(m.authorName||"?")}</td>
+        <td>${m.conflicts.length?m.conflicts.map(c=>`<div class="conflict">${esc(c.reviewerName)} · ${{same_org:"同机构"+(c.org||""),recent_collaboration:"两年内合作 "+(c.years||[]).join("/"),no_expertise:"专长不符"}[c.reason]}</div>`).join(""):'<span class="muted">无</span>'}</td></tr>`).join("")
+      + `</tbody></table></div>`;
+  } else {
+    $("#conflictBox").innerHTML = '<p class="muted">仅管理员可查看回避矩阵。</p>';
+  }
+  const detail = await api("/api/calls/"+callId);
+  $("#assignmentTable").innerHTML = `<div style="overflow:auto"><table><thead><tr>
+    <th>编号</th><th>组别</th><th>作品</th>${isAdmin?"<th>作者</th>":""}<th>状态</th><th>有效评审</th><th>回避</th><th>已评分</th><th>当前均分</th></tr></thead><tbody>` +
+    detail.submissions.map(s=>`<tr><td class="code">${s.id}</td><td>${GROUP_NAME[s.groupId]}</td>
+      <td>${esc(s.title)}</td>${isAdmin?`<td>${esc(s.authorName||"匿名")}</td>`:""}
+      <td>${statusPill(s.status)}</td>
+      <td>${s.activeAssignments??"—"}</td><td>${s.recusedAssignments??0}</td>
+      <td>${s.scoreCount??0}</td><td>${s.avgScore??"—"}</td></tr>`).join("") +
+    `</tbody></table></div>`;
+  $("#assignSummary").innerHTML = "";
+}
+
+$("#lockBtn").onclick = async ()=>{
+  const callId = $("#assignCall").value;
+  if(!callId) return flash("请先选择征稿", false);
+  try{ await api(`/api/calls/${callId}/lock`,{method:"POST"}); flash("征稿已锁定，作品内容冻结"); renderAssign(); renderCalls(); }
+  catch(e){ flash(e.message,false); }
+};
+$("#assignBtn").onclick = async ()=>{
+  const callId = $("#assignCall").value;
+  if(!callId) return flash("请先选择征稿", false);
+  try{
+    const r = await api(`/api/calls/${callId}/assignments`,{method:"POST",
+      body: JSON.stringify({ reviewersPerSubmission: 3 })});
+    flash(`分配完成：新增 ${r.created} 个评审名额`);
+    renderAssignmentTable();
+  }catch(e){
+    flash(e.message + (e.details?`（${JSON.stringify(e.details)}）`:""), false);
+  }
+};
+
+/* ---------- ③ 评分 ---------- */
+async function renderReview(){
+  if(!calls.length) calls = (await api("/api/calls")).calls;
+  fillCallSelect($("#reviewCall"), true);
+  $("#reviewCall").onchange = drawQueue;
+  drawQueue();
+}
+async function drawQueue(){
+  const callId = $("#reviewCall").value;
+  const box = $("#reviewQueue");
+  if(!callId){ box.innerHTML='<p class="muted">请选择征稿</p>'; return; }
+  if(meta.me?.role!=="reviewer"){ box.innerHTML='<p class="muted">请切换到评审身份查看评分队列。</p>'; return; }
+  const { queue } = await api(`/api/me/assignments?callId=${callId}`);
+  if(!queue.length){ box.innerHTML='<p class="muted">该征稿下没有分配给您的作品。</p>'; return; }
+  const works = await Promise.all(queue.map(a=>api("/api/submissions/"+a.submissionId).catch(()=>null)));
+  box.innerHTML = `<div class="cards">` + queue.map((a,i)=>{
+    const w = works[i];
+    return `<div class="card">
+      <div class="row" style="justify-content:space-between"><h3 class="code">${a.submissionId}</h3>${statusPill(a.status)}</div>
+      <div class="anon">匿名作品 · ${GROUP_NAME[a.groupId]}</div>
+      <h3>${esc(w?.title||"")}</h3>
+      <div class="meta">${esc(w?.medium||"")}</div>
+      <p style="font-size:13.5px">${esc(w?.statement||"")}</p>
+      ${a.status==="scored"
+        ? `<div class="row"><span>已评分：<b>${a.score}</b></span>
+             <input class="score-input" type="number" min="1" max="100" value="${a.score}" id="amend-${a.submissionId}">
+             <button class="btn ghost" data-amend="${a.submissionId}">定稿前改分</button></div>
+           <div class="meta">评分时间 ${a.scoredAt?.slice(0,16).replace("T"," ")}</div>`
+        : a.status==="recused"
+        ? `<div class="conflict">已回避：${esc(a.recuseReason||"")}</div>`
+        : `<div class="row">
+             <input class="score-input" type="number" min="1" max="100" placeholder="1-100" id="score-${a.submissionId}">
+             <input style="flex:1" placeholder="评语（可选，仅评审台留存）" id="note-${a.submissionId}">
+             <button class="btn" data-score="${a.submissionId}">提交评分</button>
+           </div>`}
+    </div>`;
+  }).join("") + `</div>`;
+
+  $$("[data-score]").forEach(b=>b.onclick=async()=>{
+    const sid=b.dataset.score, score=$("#score-"+sid).value, note=$("#note-"+sid).value;
+    try{
+      await api(`/api/submissions/${sid}/score`,{method:"PUT",
+        headers:{"Idempotency-Key":(crypto.randomUUID?crypto.randomUUID():String(Date.now()))},
+        body:JSON.stringify({ score: Number(score), note })});
+      flash(`${sid} 评分已提交`); drawQueue();
+    }catch(e){ flash(e.message,false); }
+  });
+  $$("[data-amend]").forEach(b=>b.onclick=async()=>{
+    const sid=b.dataset.amend, score=$("#amend-"+sid).value;
+    try{ await api(`/api/submissions/${sid}/score`,{method:"PATCH",body:JSON.stringify({ score:Number(score) })});
+      flash(`${sid} 分数已更新`); drawQueue();
+    }catch(e){ flash(e.message,false); }
+  });
+}
+
+/* ---------- ④ 回避 ---------- */
+async function renderRecuse(){
+  if(!calls.length) calls = (await api("/api/calls")).calls;
+  fillCallSelect($("#recuseCall"), true);
+  $("#recuseCall").onchange = drawRecuse;
+  drawRecuse();
+}
+async function drawRecuse(){
+  const callId=$("#recuseCall").value, box=$("#recuseList");
+  if(!callId){ box.innerHTML='<p class="muted">请选择征稿</p>'; return; }
+  if(meta.me?.role!=="reviewer"){ box.innerHTML='<p class="muted">请切换到评审身份。</p>'; return; }
+  const { queue } = await api(`/api/me/assignments?callId=${callId}`);
+  box.innerHTML = `<div style="overflow:auto"><table><thead><tr><th>作品编号</th><th>组别</th><th>当前状态</th><th>操作</th></tr></thead><tbody>` +
+    queue.map(a=>`<tr><td class="code">${a.submissionId}</td><td>${GROUP_NAME[a.groupId]}</td>
+      <td>${a.status==="scored"?`已评分 ${a.score}`:a.status==="recused"?`已回避：${esc(a.recuseReason||"")}`:"待评分"}</td>
+      <td>${a.status==="assigned"
+        ? `<div class="row"><input style="max-width:300px" placeholder="回避原因，如：发现同机构/近两年合作" id="rsn-${a.submissionId}">
+           <button class="btn rust" data-recuse="${a.submissionId}">申请回避</button></div>`
+        : a.status==="recused" ? '<span class="muted">已回避，等待管理员补位</span>'
+        : '<span class="muted">已评分，不能自行回避</span>'}</td></tr>`).join("") +
+    `</tbody></table>`;
+  $$("[data-recuse]").forEach(b=>b.onclick=async()=>{
+    const sid=b.dataset.recuse, reason=$("#rsn-"+sid).value || "评审主动回避";
+    try{ const r=await api(`/api/submissions/${sid}/recuse`,{method:"POST",body:JSON.stringify({reason})});
+      flash(`已回避 ${sid}；当前有效评审 ${r.activeReviewers} 人${r.needsBackfill?"，需管理员补位":""}`);
+      drawRecuse();
+    }catch(e){ flash(e.message,false); }
+  });
+}
+
+/* ---------- ⑤ 榜单 ---------- */
+async function renderRanking(){
+  if(!calls.length) calls = (await api("/api/calls")).calls;
+  fillCallSelect($("#rankCall"), true);
+  $("#rankCall").onchange = drawRanking;
+  drawRanking();
+}
+async function drawRanking(){
+  const callId=$("#rankCall").value, box=$("#rankingBox");
+  if(!callId){ box.innerHTML='<p class="muted">请选择征稿</p>'; return; }
+  const r = await api(`/api/calls/${callId}/results`);
+  if(!r.ranking.length){ box.innerHTML='<p class="muted">尚未定稿。定稿前请确认所有作品均有至少 3 个独立评分。</p>'; return; }
+  box.innerHTML = `<p>定稿时间：${r.finalizedAt?.replace("T"," ").slice(0,19)||"—"} · 最低分 ${r.minScore} · ${r.locked?"名单已锁定":""}</p>
+  <div style="overflow:auto"><table><thead><tr><th>总排名</th><th>组内</th><th>编号</th><th>作品</th><th>组别</th><th>作者</th><th>各评审原始分</th><th>去极值均分</th><th>结果</th></tr></thead><tbody>` +
+  r.ranking.map(row=>`<tr>
+    <td><span class="rank-no ${row.outcome==="selected"?"gold":""}">${row.rank}</span></td>
+    <td>${row.groupRank}</td><td class="code">${row.submissionId}</td>
+    <td>${esc(row.submission.title)}</td><td>${GROUP_NAME[row.groupId]}</td>
+    <td>${esc(row.submission.authorName)}<div class="meta">${esc(row.submission.authorOrg)}</div></td>
+    <td><span class="meta">[${row.scores.join(", ")}]</span></td>
+    <td><b>${row.avgScore}</b></td>
+    <td>${statusPill(row.outcome==="selected"?"selected":row.outcome==="waitlisted"?"waitlisted":"withdrawn")}
+        ${row.outcome==="retired"?'<span class="pill retired">已退出</span>':""}</td></tr>`).join("")
+  + `</tbody></table></div>`;
+}
+$("#finalizeBtn").onclick = async ()=>{
+  const callId=$("#rankCall").value; if(!callId) return;
+  try{
+    const r = await api(`/api/calls/${callId}/finalize`,{method:"POST",body:JSON.stringify({})});
+    flash(`已定稿：入选 ${r.ranking.filter(x=>x.outcome==="selected").length} 件，候补 ${r.ranking.filter(x=>x.outcome==="waitlisted").length} 件`);
+    drawRanking(); renderCalls();
+  }catch(e){ flash(e.message+(e.details?.incomplete?`：${e.details.incomplete.map(x=>x.submissionId+"("+x.scored+"/3)").join("，")}`:""), false); }
+};
+
+/* ---------- ⑥ 递补 ---------- */
+async function renderPromo(){
+  if(!calls.length) calls = (await api("/api/calls")).calls;
+  fillCallSelect($("#promoCall"), true);
+  $("#promoCall").onchange = drawPromo;
+  drawPromo();
+}
+async function drawPromo(){
+  const callId=$("#promoCall").value, box=$("#promoBox");
+  if(!callId){ box.innerHTML='<p class="muted">请选择征稿</p>'; return; }
+  const detail = await api("/api/calls/"+callId);
+  const r = await api(`/api/calls/${callId}/results`);
+  if(detail.status!=="finalized"){ box.innerHTML='<p class="muted">该征稿尚未定稿锁定，无法演示退出与递补。可切换到「2025 年度展」。</p>'; return; }
+  const rows = r.ranking.map(row=>{
+    const canWithdraw = row.outcome==="selected";
+    return `<tr>
+      <td><span class="rank-no ${row.outcome==="selected"?"gold":""}">${row.rank}</span></td>
+      <td class="code">${row.submissionId}</td><td>${GROUP_NAME[row.groupId]}</td>
+      <td>${esc(row.submission.title)}</td>
+      <td>${esc(row.submission.authorName)}</td>
+      <td><b>${row.avgScore}</b></td>
+      <td>${statusPill(row.outcome==="selected"?"selected":row.outcome==="waitlisted"?"waitlisted":row.outcome==="retired"?"retired":"withdrawn")}</td>
+      <td>${canWithdraw?`<button class="btn rust" data-exit="${row.submissionId}">办理退出（顺位递补）</button>`:"—"}</td>
+    </tr>`;
+  }).join("");
+  box.innerHTML = `<div style="overflow:auto"><table><thead><tr><th>顺位</th><th>编号</th><th>组别</th><th>作品</th><th>作者</th><th>均分</th><th>状态</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="meta">规则：入选者退出 → 系统在同组候补链中按总顺位取第一位递补；无候补则名额空缺，不可跨组顶替。</p>`;
+  $$("[data-exit]").forEach(b=>b.onclick=async()=>{
+    const sid=b.dataset.exit;
+    if(!confirm(`确认 ${sid} 退出入选名单？系统将立即按同组顺位递补。`)) return;
+    try{
+      const out = await api(`/api/submissions/${sid}/withdraw`,{method:"POST",
+        body:JSON.stringify({reason:"作者因故退出"})});
+      flash(out.promoted?`${sid} 已退出，${out.promoted.submissionId}（${out.promoted.avgScore}分）顺位递补`:"已退出；同组无候补，名额空缺");
+      drawPromo(); renderCalls();
+    }catch(e){ flash(e.message,false); }
+  });
+}
+
+/* ---------- Tab 切换 ---------- */
+const renderers = { calls:renderCalls, assign:renderAssign, review:renderReview, recuse:renderRecuse, ranking:renderRanking, promotion:renderPromo };
+$$("#tabs button").forEach(b=>b.onclick=async()=>{
+  $$("#tabs button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  $$("main > section").forEach(s=>s.hidden = true);
+  $("#tab-"+b.dataset.tab).hidden = false;
+  try{ await renderers[b.dataset.tab](); }catch(e){ flash(e.message,false); }
+});
+
+/* ---------- 启动 ---------- */
+(async function init(){
+  try{
+    await loadMeta();
+    await renderCalls();
+    $("#reloadBtn").onclick = ()=>location.reload();
+  }catch(e){ flash("初始化失败："+e.message,false); }
+})();
+</script>
+</body>
+</html>

@@ -1,9 +1,14 @@
 {
-  "name": "zfl-40-cyanotype-negative-room",
+  "name": "cyanotype-review-desk",
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "description": "蓝晒工作室开放征稿与匿名评审台",
   "scripts": {
-    "start": "node server.js"
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

@@ -16,3 +16,9 @@ pnpm-debug.log*
 dist/
 build/
 coverage/
+
+# 运行时数据与测试临时库
+data/*.json
+data/*.tmp-*
+test/_*.json
+test/_*.tmp-*
