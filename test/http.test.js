@@ -295,6 +295,39 @@ test("榜单：公开结果，含原始分、去极值均分与状态", async ()
   assert.ok(selected.length >= 3); // G1:2 + G2:2 + G3:1，但分数需过线
 });
 
+test("旧年度榜：手写种子行即使未存 scores，接口也从评分记录补全原始分明细", async () => {
+  const r = await req("GET", "/api/calls/2025-annual/results");
+  assert.equal(r.status, 200);
+  assert.equal(r.json.locked, true);
+
+  // G1-001 原始分 88/90/95 → 去极值后中位数 90（修复前 row.scores 为 undefined，前端直接崩）
+  const g1 = r.json.ranking.find((x) => x.submissionId === "G1-001");
+  assert.deepEqual(g1.scores, [88, 90, 95]);
+  assert.equal(g1.avgScore, 90);
+
+  // G3-001 有 1 条回避记录，scores 只应包含 3 个有效评分，不含回避
+  const g3 = r.json.ranking.find((x) => x.submissionId === "G3-001");
+  assert.equal(g3.scores.length, 3);
+  assert.deepEqual(g3.scores, [88, 92, 95]);
+  assert.equal(g3.recusedCount, 1);
+  assert.equal(g3.avgScore, 92);
+
+  // 每一行都有数组（前端 row.scores.join 不再遇到 undefined）
+  for (const row of r.json.ranking) assert.ok(Array.isArray(row.scores));
+});
+
+test("静态：页面与 ES 模块工具均可正常返回（200 + 正确 MIME）", async () => {
+  const idx = await fetch(BASE + "/");
+  assert.equal(idx.status, 200);
+  assert.match(idx.headers.get("content-type"), /text\/html/);
+
+  const js = await fetch(BASE + "/app-utils.js");
+  assert.equal(js.status, 200);
+  assert.match(js.headers.get("content-type"), /javascript/);
+  const body = await js.text();
+  assert.match(body, /readStoredIdentity/);
+});
+
 test("顺位递补：2025 旧榜 G2 入选者退出 → G2-002 顺位入选；非法退出 409", async () => {
   // 候补者不能直接退出
   const bad = await req("POST", "/api/submissions/G2-002/withdraw", {

@@ -208,11 +208,17 @@
 
 <div class="flash" id="flash"></div>
 
-<script>
+<script type="module">
+import ReviewUtils from "./app-utils.js";
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const GROUP_NAME = { G1:"实验蓝晒组", G2:"古典工艺组", G3:"摄影书册组" };
-let me = null, meta = null, calls = [];
+// 关键：在发起任何请求之前先从 localStorage 恢复身份，否则首个 /api/meta 不带身份头，
+// 刷新后评审队列会误判为“未选择评审身份”。
+let me = ReviewUtils.readStoredIdentity(window.localStorage)
+  || window.localStorage.getItem("uid") // 向后兼容旧版本使用的键
+  || null;
+let meta = null, calls = [];
 
 function flash(msg, ok=true){
   const box = $("#flash");
@@ -254,9 +260,16 @@ async function loadMeta(){
   if (!sel.options.length){
     sel.innerHTML = '<option value="">（未选择身份）</option>' +
       meta.users.map(u=>`<option value="${u.id}">${u.role==="admin"?"管理员":u.role==="reviewer"?"评审":"作者"} · ${u.name}（${u.org}）</option>`).join("");
-    sel.value = localStorage.getItem("uid") || "";
-    sel.onchange = ()=>{ localStorage.setItem("uid", sel.value||""); location.reload(); };
+    sel.value = me || "";
+    sel.onchange = ()=>{
+      const uid = sel.value || "";
+      // 统一走工具模块持久化，刷新后继续生效；同时写旧键保持兼容。
+      ReviewUtils.writeStoredIdentity(window.localStorage, uid);
+      try { localStorage.setItem("uid", uid); } catch {}
+      location.reload();
+    };
   }
+  // 以服务端确认的身份为准（已删除的用户会回落到 null）。
   me = meta.me?.id || null;
 }
 
@@ -496,10 +509,10 @@ async function drawRanking(){
     <td>${row.groupRank}</td><td class="code">${row.submissionId}</td>
     <td>${esc(row.submission.title)}</td><td>${GROUP_NAME[row.groupId]}</td>
     <td>${esc(row.submission.authorName)}<div class="meta">${esc(row.submission.authorOrg)}</div></td>
-    <td><span class="meta">[${row.scores.join(", ")}]</span></td>
-    <td><b>${row.avgScore}</b></td>
-    <td>${statusPill(row.outcome==="selected"?"selected":row.outcome==="waitlisted"?"waitlisted":"withdrawn")}
-        ${row.outcome==="retired"?'<span class="pill retired">已退出</span>':""}</td></tr>`).join("")
+    <td><span class="meta">${ReviewUtils.formatScoreDetail(row).scoreText}</span></td>
+    <td><b>${ReviewUtils.formatScoreDetail(row).avg}</b></td>
+    <td>${statusPill(row.outcome==="selected"?"selected":row.outcome==="waitlisted"?"waitlisted":row.outcome==="retired"?"retired":"withdrawn")}
+        ${row.currentStatus==="retired"?'<span class="pill retired">已退出</span>':""}</td></tr>`).join("")
   + `</tbody></table></div>`;
 }
 $("#finalizeBtn").onclick = async ()=>{

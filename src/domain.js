@@ -662,17 +662,28 @@ export function resultView(db, callId) {
   if (!result) return { callId, status: call.status, locked: false, ranking: [] };
   return {
     ...result,
-    ranking: result.ranking.map((r) => ({
-      ...r,
-      submission: (() => {
-        const s = getSubmission(db, r.submissionId);
-        return {
+    ranking: result.ranking.map((r) => {
+      const s = getSubmission(db, r.submissionId);
+      // 原始分数以评分分配记录为权威来源（旧榜种子的手写行不含 scores，在此补齐）。
+      const scored = db.assignments
+        .filter((a) => a.submissionId === r.submissionId && a.status === "scored")
+        .map((a) => a.score)
+        .sort((x, y) => x - y);
+      return {
+        ...r,
+        scores: scored,
+        recusedCount: db.assignments.filter(
+          (a) => a.submissionId === r.submissionId && a.status === "recused").length,
+        avgScore: r.avgScore ?? trimmedAverage(scored),
+        // 作品当前状态可能已因退出/递补改变，以作品状态为准。
+        currentStatus: s.status,
+        submission: {
           id: s.id, title: s.title, groupId: s.groupId,
           authorName: db.users[s.authorId]?.name,
           authorOrg: db.users[s.authorId]?.org,
           createdAt: s.createdAt,
-        };
-      })(),
-    })),
+        },
+      };
+    }),
   };
 }

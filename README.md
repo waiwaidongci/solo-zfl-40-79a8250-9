@@ -7,10 +7,15 @@
 ## 运行
 
 ```bash
-node --version        # 需要 Node >= 18
+node --version        # 需要 Node >= 18（在 18/20/22+ 行为一致）
 npm start             # 默认 http://localhost:3040
-npm test              # 38 个自动化测试（领域单测 + HTTP 端到端）
+npm test              # 跨版本测试运行器，发现并运行 test/ 全部用例；失败返回非零
 ```
+
+> 测试为什么用 `scripts/run-tests.mjs`：较新的 Node（22+）会把 `node --test <目录>` 的目录
+> 参数当成待执行模块，而旧版（20）需要显式文件。运行器枚举 `test/*.test.js` 后以显式文件
+> 列表调用 `node --test`，并在自身被 `node --test` 嵌套调用时清除 `NODE_TEST_CONTEXT`，
+> 两个版本都能稳定发现并运行全部用例，子进程退出码原样透传。
 
 首次启动会在 `data/cyanotype-review.json` 生成演示数据：
 
@@ -93,8 +98,14 @@ src/
   seed.js     # 演示数据（含同机构/合作/回避/旧榜候补链等对照样本）
   domain.js   # 纯领域逻辑：提交、锁定、分配、回避、评分、均分、定稿、递补
   server.js   # HTTP 路由、身份、幂等键、静态首页
-public/index.html  # 六标签单页应用（无构建、无框架）
+public/
+  index.html    # 六标签单页应用（ES module，无构建、无框架）
+  app-utils.js  # 页面纯工具：身份的 localStorage 持久化、榜单分数健壮渲染（可被单测直接 import）
+scripts/
+  run-tests.mjs   # 跨版本测试入口（枚举用例文件、透传失败退出码）
 test/
-  domain.test.js  # 24 个领域单元测试
-  http.test.js    # 14 个 HTTP 端到端测试（含并发评分、幂等重试、重启恢复）
+  domain.test.js     # 领域单元测试（trim 均分、回避、分配、定稿、递补等）
+  http.test.js       # HTTP 端到端（并发评分、幂等重试、旧榜分数补全、重启恢复等）
+  app-utils.test.js  # 页面工具（刷新后身份保持、榜单缺分数不崩）
+  entry.test.js      # 测试入口自身的发现/退出码契约
 ```
